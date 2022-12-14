@@ -1,42 +1,39 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <omp.h>
+#include <mpi.h>
 
-int fib(int n)
+void main(int argc, char *argv[])
 {
-    int a = 0, b = 1, c;
+    int size, rank;
+    MPI_Status stat;
 
-#pragma omp parallel for schedule(static, 2)
-    for (int i = 0; i < n; i++)
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    int n = 7, root = 0, global;
+
+    MPI_Bcast(&n, 1, MPI_INT, root, MPI_COMM_WORLD);
+
+    int localprod = 1;
+    int len = (n / size) + 1;
+
+    for (int i = (rank * len) + 1; i <= ((rank + 1) * len); i++)
     {
-#pragma omp critical
-        {
-            c = a + b;
-            a = b;
-            b = c;
-        }
+        if (i > n)
+            break;
+
+        localprod *= i;
     }
 
-    return b;
-}
+    printf("LocalProd : %d \n", localprod);
 
-int main()
-{
-    int n = 20;
+    MPI_Reduce(&localprod, &global, 1, MPI_INT, MPI_PROD, root, MPI_COMM_WORLD);
 
-    double start = omp_get_wtime();
-
-#pragma omp parallel for
-    for (int i = 0; i < n; i++)
+    if (rank == root)
     {
-        int t = omp_get_thread_num();
-
-        printf("Thread %d : fib(%d) is %d \n", t, i, fib(i));
+        printf("The factorial of %d is %d\n", n, global);
     }
 
-    double end = omp_get_wtime();
-
-    printf("Time taken is %f \n", end - start);
-
-    return 0;
+    MPI_Finalize();
 }
